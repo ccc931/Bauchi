@@ -13,48 +13,80 @@ export interface FetchMetalPricesOptions {
   metals?: MetalSymbol[];
 }
 
+/** 长江有色 API 返回：铜 元/吨，银 元/千克 */
+const CCMN_API_PATH = '/api/ccmn-prices';
+
+async function fetchCcmnPrices(): Promise<MetalPriceSnapshot> {
+  const base =
+    typeof import.meta.env.VITE_CCMN_API_BASE === 'string'
+      ? import.meta.env.VITE_CCMN_API_BASE
+      : '';
+  const res = await fetch(`${base}${CCMN_API_PATH}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(
+      (err as { error?: string }).error ?? `长江有色接口错误: ${res.status}`
+    );
+  }
+  const data = (await res.json()) as {
+    timestamp: string;
+    baseCurrency: string;
+    copperPerTonRmb: number;
+    silverPerKgRmb: number;
+  };
+  const metals: { symbol: MetalSymbol; name: string; currency: string; pricePerTon: number }[] = [];
+  if (data.copperPerTonRmb != null) {
+    metals.push({
+      symbol: 'CU',
+      name: 'Copper',
+      currency: data.baseCurrency ?? 'CNY',
+      pricePerTon: data.copperPerTonRmb
+    });
+  }
+  if (data.silverPerKgRmb != null) {
+    metals.push({
+      symbol: 'AG',
+      name: 'Silver',
+      currency: data.baseCurrency ?? 'CNY',
+      pricePerTon: data.silverPerKgRmb * 1000
+    });
+  }
+  return {
+    timestamp: data.timestamp ?? new Date().toISOString(),
+    baseCurrency: data.baseCurrency ?? 'CNY',
+    metals
+  };
+}
+
 /**
- * 封装金属价格 API 调用。
- *
- * 默认对接 metals-api.com 的 latest 接口，你可以在 .env 中配置：
- * - VITE_METALS_API_URL
- * - VITE_METALS_API_KEY
- *
- * 也可以根据自己采购的数据源调整解析逻辑。
+ * 封装金属价格：优先使用长江有色金属网（自动模式默认），
+ * 也可通过 VITE_PRICE_SOURCE=metals-api 使用国际接口（需配置 VITE_METALS_API_KEY）。
  */
 export async function fetchMetalPrices(
   options?: FetchMetalPricesOptions
 ): Promise<MetalPriceSnapshot> {
+  const source = import.meta.env.VITE_PRICE_SOURCE ?? 'ccmn';
+
+  if (source === 'ccmn') {
+    try {
+      const snapshot = await fetchCcmnPrices();
+      const want = options?.metals ?? ['CU', 'AG'];
+      const filtered = snapshot.metals.filter((m) => want.includes(m.symbol));
+      return { ...snapshot, metals: filtered };
+    } catch (e) {
+      console.warn('长江有色价格获取失败，使用模拟数据', e);
+      return getMockSnapshot();
+    }
+  }
+
   const apiUrl =
     import.meta.env.VITE_METALS_API_URL ?? 'https://metals-api.com/api/latest';
   const apiKey = import.meta.env.VITE_METALS_API_KEY;
-
   const symbols =
     options?.metals?.join(',') ?? DEFAULT_METALS.map((m) => m.symbol).join(',');
 
   if (!apiKey) {
-    // 没有配置真实 API Key 时，返回模拟数据，方便本地开发和前端调试
-    const now = new Date().toISOString();
-    return {
-      timestamp: now,
-      baseCurrency: 'USD',
-      metals: DEFAULT_METALS.map((m) => {
-        const base: Record<MetalSymbol, number> = {
-          CU: 9000,
-          AG: 700000, // 约 22 USD/oz 对应吨位价格，仅作量级示意
-          AL: 2400,
-          ZN: 2600,
-          PB: 2200,
-          NI: 18000
-        };
-        return {
-          symbol: m.symbol,
-          name: m.name,
-          currency: 'USD',
-          pricePerTon: base[m.symbol]
-        };
-      })
-    };
+    return getMockSnapshot();
   }
 
   const url = new URL(apiUrl);
@@ -67,8 +99,6 @@ export async function fetchMetalPrices(
     throw new Error(`获取金属价格失败: ${res.status} ${res.statusText}`);
   }
 
-  // metals-api.com 返回结构示例：
-  // { timestamp: 1700000000, base: "USD", rates: { CU: 9000, AL: 2400, ... } }
   const data: {
     timestamp: number;
     base: string;
@@ -76,24 +106,40 @@ export async function fetchMetalPrices(
   } = await res.json();
 
   const metals = DEFAULT_METALS.filter((m) =>
-    (options?.metals ?? DEFAULT_METALS.map((d) => d.symbol)).includes(
-      m.symbol
-    )
-  ).map((m) => {
-    const key = m.symbol;
-    const price = data.rates[key];
-    return {
-      symbol: m.symbol,
-      name: m.name,
-      currency: data.base ?? 'USD',
-      pricePerTon: price
-    };
-  });
+    (options?.metals ?? DEFAULT_METALS.map((d) => d.symbol)).includes(m.symbol)
+  ).map((m) => ({
+    symbol: m.symbol,
+    name: m.name,
+    currency: data.base ?? 'USD',
+    pricePerTon: data.rates[m.symbol]
+  }));
 
   return {
     timestamp: new Date(data.timestamp * 1000).toISOString(),
     baseCurrency: data.base ?? 'USD',
     metals
+  };
+}
+
+function getMockSnapshot(): MetalPriceSnapshot {
+  const now = new Date().toISOString();
+  const base: Record<MetalSymbol, number> = {
+    CU: 9000,
+    AG: 700_000,
+    AL: 2400,
+    ZN: 2600,
+    PB: 2200,
+    NI: 18000
+  };
+  return {
+    timestamp: now,
+    baseCurrency: 'USD',
+    metals: DEFAULT_METALS.map((m) => ({
+      symbol: m.symbol,
+      name: m.name,
+      currency: 'USD',
+      pricePerTon: base[m.symbol]
+    }))
   };
 }
 

@@ -40,36 +40,36 @@ pnpm dev        # 启动本地开发服务
 
 ## 配置金属价格数据源
 
-项目预留了金属价格数据源的配置，默认对接 `metals-api.com` 的接口结构；如果你有其他数据源（例如 LME、Fastmarkets 或自建报价接口），可以按照相同结构进行替换。
+**自动模式默认使用「长江有色金属网」**（[www.ccmn.cn](https://www.ccmn.cn/index_table/)）的 1#铜（元/吨）、1#白银（元/千克）报价。部署到 Vercel 后，站点会通过自带的 `/api/ccmn-prices` 接口抓取该页面的最新价格，无需配置 API Key。
 
-### 1. 环境变量
+### 1. 长江有色（默认）
 
-在根目录创建 `.env.local` 文件（不会提交到代码仓库），示例：
+- 数据来源：长江有色金属网 `index_table` 页，1#铜 均价（元/吨）、1#白银 均价（元/千克）。
+- 部署到 Vercel 后，`/api/ccmn-prices` 会自动生效；本地开发时，`vite` 已配置将 `/api` 代理到你的 Vercel 部署地址，因此本地也能用长江有色数据（需先部署一次）。
+- 若抓取失败（如网站改版或网络问题），自动模式会回退到模拟价格。
+
+### 2. 国际接口（可选）
+
+若希望自动模式使用国际报价（如 metals-api.com），在项目根目录创建 `.env.local`：
 
 ```bash
+VITE_PRICE_SOURCE=metals-api
 VITE_METALS_API_URL=https://metals-api.com/api/latest
 VITE_METALS_API_KEY=YOUR_API_KEY_HERE
 ```
 
-前端通过 `src/api/metalPrices.ts` 中的 `fetchMetalPrices` 函数读取上述配置：
+- `VITE_PRICE_SOURCE=ccmn`（或未设置）：使用长江有色。
+- `VITE_PRICE_SOURCE=metals-api`：使用上述国际接口，需配置 `VITE_METALS_API_KEY`。
 
-- `VITE_METALS_API_URL`：金属价格接口地址
-- `VITE_METALS_API_KEY`：访问该接口所需的 Key
+### 3. 本地开发时指定长江有色 API 地址（可选）
 
-> 安全提醒：生产环境请将真实 API Key 配置在服务器或 CI/CD 的环境变量中，不要直接写进代码仓库。
+若本地未配置代理或部署地址变化，可设置：
 
-### 2. 没有 API Key 时的行为
+```bash
+VITE_CCMN_API_BASE=https://你的Vercel部署地址
+```
 
-如果没有配置 `VITE_METALS_API_KEY`，系统会自动回退到**模拟数据模式**，方便前端联调：
-
-- 铜价：约 `9,000 USD/t`
-- 镍、铝、锌、铅：按简单比例推算
-
-你依然可以调整矿山参数，看到利润随参数变化的趋势，但价格并非真实市场价格。
-
-### 3. 替换为你自己的数据源（可选）
-
-如果你有内部金属价格接口，只需要修改 `src/api/metalPrices.ts` 中的 `fetchMetalPrices` 函数，将当前对 `metals-api.com` 返回结构的解析替换为你的接口结构即可，保持返回类型 `MetalPriceSnapshot` 不变。
+这样前端会请求 `https://你的Vercel部署地址/api/ccmn-prices` 获取价格。
 
 ## 利润计算逻辑（简要）
 
