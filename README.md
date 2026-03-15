@@ -103,11 +103,11 @@ Profit\_{USD} = Revenue - Cost\_total
 
 再根据汇率折算为 NGN。
 
-## 通过网址发布（推荐：Vercel）
+## 通过网址发布（推荐：Cloudflare Pages）
 
-希望用户通过一个网址就能打开时，推荐用 **Vercel** 部署（免费、带 HTTPS，且项目里的价格接口 `/api/ccmn-prices` 会一起生效）。
+希望用户通过一个网址就能打开时，推荐用 **Cloudflare Pages** 部署（免费、HTTPS、国内访问通常更稳定，价格接口会一起生效）。若 Vercel 在你或用户网络下打不开或一直加载，可改用本方式。
 
-### 步骤一：把代码放到 GitHub
+### 步骤一：把代码推到 GitHub
 
 1. 在 [GitHub](https://github.com) 新建一个仓库（如 `bauchi-profit`）。
 2. 在项目根目录执行：
@@ -121,18 +121,20 @@ git remote add origin https://github.com/你的用户名/bauchi-profit.git
 git push -u origin main
 ```
 
-### 步骤二：在 Vercel 里导入并部署
+### 步骤二：在 Cloudflare Pages 里部署
 
-1. 打开 [vercel.com](https://vercel.com)，用 GitHub 账号登录。
-2. 点击 **Add New… → Project**，在列表里选刚推送的仓库（如 `bauchi-profit`）。
-3. 保持默认即可（Vercel 会自动识别 Vite）：
-   - **Build Command**：`npm run build`
-   - **Output Directory**：`dist`
-   - **Install Command**：`npm install`
-4. 点击 **Deploy**，等一两分钟。
-5. 部署完成后会给你一个地址，例如：`https://bauchi-profit-xxx.vercel.app`。
+1. 打开 [dash.cloudflare.com](https://dash.cloudflare.com) 登录，左侧进入 **Workers & Pages**。
+2. 点击 **Create** → **Pages** → **Connect to Git**。
+3. 选择 **GitHub**，授权后选中刚推送的仓库（如 `bauchi-profit`）。
+4. 配置构建（一般保持默认即可）：
+   - **Production branch**：`main`
+   - **Build command**：`npm run build`
+   - **Build output directory**：`dist`
+   - **Root directory**：留空（用仓库根目录）
+5. 点击 **Save and Deploy**，等一两分钟。
+6. 部署完成后会得到一个地址，例如：`https://bauchi-profit.pages.dev`。
 
-把这个链接发给用户，他们用浏览器打开即可使用；自动模式会通过站内的 `/api/ccmn-prices` 拉取长江有色价格，无需再配置。
+把**这个链接**发给用户，让他们直接打开即可；自动模式会通过站内的 `/api/ccmn-prices` 拉取长江有色价格。
 
 ### 之后更新网站
 
@@ -144,7 +146,11 @@ git commit -m "更新说明"
 git push
 ```
 
-Vercel 会按你连接的仓库自动重新构建、发布，网址不变。
+Cloudflare 会按连接的仓库自动重新构建、发布，网址不变。
+
+### 备选：Vercel
+
+若你更习惯用 Vercel，可到 [vercel.com](https://vercel.com) 用 GitHub 导入同一仓库，构建命令填 `npm run build`，输出目录填 `dist` 即可。项目内也保留了 Vercel 用的 `api/ccmn-prices.ts`。
 
 ---
 
