@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { fetchMetalPrices } from '../api/metalPrices';
 import type { MetalPriceSnapshot } from '../types';
 
@@ -10,7 +11,7 @@ interface MineInput {
   annualTonnage10k: string; // 年开采量，单位：万吨
 }
 
-type PriceMode = 'auto' | 'manual' | 'table';
+type PriceMode = 'auto' | 'manual';
 
 const defaultInput: MineInput = {
   totalCostPerTonOre: '1485',
@@ -34,8 +35,9 @@ export const ProfitDashboard: React.FC = () => {
   const [manualCopperPrice, setManualCopperPrice] = useState<number>(9000);
   const [manualSilverPricePerGram, setManualSilverPricePerGram] =
     useState<number>(5);
+  const [manualCopperInputDisplay, setManualCopperInputDisplay] = useState<string>('9000');
+  const [manualSilverInputDisplay, setManualSilverInputDisplay] = useState<string>('5');
   const [hasUserEditedManualPrices, setHasUserEditedManualPrices] = useState(false);
-  const [tableDataSource, setTableDataSource] = useState<'auto' | 'manual'>('auto');
   const [tableRows, setTableRows] = useState<Array<{
     id: string;
     source: 'auto' | 'manual';
@@ -142,13 +144,79 @@ export const ProfitDashboard: React.FC = () => {
     if (!hasUserEditedManualPrices && snapshot) {
       const cu = snapshot.metals.find((m) => m.symbol === 'CU');
       const ag = snapshot.metals.find((m) => m.symbol === 'AG');
-      if (cu?.pricePerTon) setManualCopperPrice(cu.pricePerTon);
-      if (ag?.pricePerTon) setManualSilverPricePerGram(ag.pricePerTon / 1_000_000);
+      if (cu?.pricePerTon) {
+        setManualCopperPrice(cu.pricePerTon);
+        setManualCopperInputDisplay(String(cu.pricePerTon));
+      }
+      if (ag?.pricePerTon) {
+        const agGram = ag.pricePerTon / 1_000_000;
+        setManualSilverPricePerGram(agGram);
+        setManualSilverInputDisplay(String(agGram));
+      }
+    } else {
+      setManualCopperInputDisplay(String(manualCopperPrice));
+      setManualSilverInputDisplay(String(manualSilverPricePerGram));
     }
     setPriceMode('manual');
   };
 
+  const addCurrentToTable = (source: 'auto' | 'manual') => {
+    const cu = source === 'auto' ? (copperPrice?.pricePerTon ?? 9000) : manualCopperPrice;
+    const agPerGram = source === 'auto'
+      ? (effectiveSilverPricePerTon / 1_000_000)
+      : manualSilverPricePerGram;
+    const cuGrade = safeParseNumber(inputs.copperGradePercent, 2.5) / 100;
+    const agGrade = safeParseNumber(inputs.silverGradePercent, 0.008) / 100;
+    const recovery = safeParseNumber(inputs.recoveryPercent, 85) / 100;
+    const costPerTon = safeParseNumber(inputs.totalCostPerTonOre, 1485);
+    const annual10k = safeParseNumber(inputs.annualTonnage10k, 0);
+    const revenue = (cuGrade * recovery * cu) + (agGrade * recovery * agPerGram * 1_000_000);
+    const profitPerTon = revenue - costPerTon;
+    const annualProfit = profitPerTon * annual10k * 10_000;
+    setTableRows((prev) => [
+      ...prev,
+      {
+        id: `${Date.now()}`,
+        source,
+        copperPrice: cu,
+        silverPricePerGram: agPerGram,
+        profitPerTon,
+        annualProfit,
+        costPerTon,
+        copperGrade: safeParseNumber(inputs.copperGradePercent, 2.5),
+        silverGrade: safeParseNumber(inputs.silverGradePercent, 0.008),
+        recovery: safeParseNumber(inputs.recoveryPercent, 85),
+        annualTonnage10k: annual10k
+      }
+    ]);
+  };
+
+  const exportTableToExcel = () => {
+    const headers = [
+      '序号', '铜价 (元/吨)', '银价 (元/克)', '每吨利润 (元/吨)', '年利润 (元/年)',
+      '综合成本 (元/吨)', '铜品位 (%)', '银品位 (%)', '回收率 (%)', '年开采量 (万吨)', '数据来源'
+    ];
+    const data = tableRows.map((row, index) => [
+      index + 1,
+      row.copperPrice,
+      row.silverPricePerGram,
+      row.profitPerTon,
+      row.annualProfit,
+      row.costPerTon,
+      row.copperGrade,
+      row.silverGrade,
+      row.recovery,
+      row.annualTonnage10k,
+      row.source === 'auto' ? '自动' : '手动'
+    ]);
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '利润测算表');
+    XLSX.writeFile(wb, `利润测算表_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   return (
+    <>
     <div className="dashboard-grid">
       <section className="card card-form">
         <h2>矿山参数假设（每吨矿石）</h2>
@@ -253,7 +321,7 @@ export const ProfitDashboard: React.FC = () => {
       <section className="card card-metrics">
         <h2>实时利润测算（每吨矿石）</h2>
         <p className="card-desc">
-          自动 / 手动切换价格来源；表格模式可将当前数据按自动或手动整合成表，方便查看。
+          自动 / 手动切换价格来源；点击「将当前数据加入表格」可把当前数据加入下方表格并导出。
         </p>
 
         <div className="mode-toggle">
@@ -279,127 +347,17 @@ export const ProfitDashboard: React.FC = () => {
           >
             手动模式（自定义价格）
           </button>
-          <button
-            type="button"
-            className={
-              priceMode === 'table'
-                ? 'mode-toggle-button active'
-                : 'mode-toggle-button'
-            }
-            onClick={() => setPriceMode('table')}
-          >
-            表格模式
-          </button>
         </div>
 
-        {priceMode === 'table' && (
-          <div className="table-mode-controls">
-            <span className="table-source-label">表格数据来源：</span>
-            <label className="table-radio">
-              <input
-                type="radio"
-                name="tableSource"
-                checked={tableDataSource === 'auto'}
-                onChange={() => setTableDataSource('auto')}
-              />
-              自动模式
-            </label>
-            <label className="table-radio">
-              <input
-                type="radio"
-                name="tableSource"
-                checked={tableDataSource === 'manual'}
-                onChange={() => setTableDataSource('manual')}
-              />
-              手动模式
-            </label>
+        <div className="add-to-table-row">
             <button
               type="button"
               className="primary-button primary-button-small"
-              onClick={() => {
-                const cu = tableDataSource === 'auto' ? (copperPrice?.pricePerTon ?? 9000) : manualCopperPrice;
-                const agPerGram = tableDataSource === 'auto'
-                  ? (effectiveSilverPricePerTon / 1_000_000)
-                  : manualSilverPricePerGram;
-                const cuGrade = safeParseNumber(inputs.copperGradePercent, 2.5) / 100;
-                const agGrade = safeParseNumber(inputs.silverGradePercent, 0.008) / 100;
-                const recovery = safeParseNumber(inputs.recoveryPercent, 85) / 100;
-                const costPerTon = safeParseNumber(inputs.totalCostPerTonOre, 1485);
-                const annual10k = safeParseNumber(inputs.annualTonnage10k, 0);
-                const revenue = (cuGrade * recovery * cu) + (agGrade * recovery * agPerGram * 1_000_000);
-                const profitPerTon = revenue - costPerTon;
-                const annualProfit = profitPerTon * annual10k * 10_000;
-                setTableRows((prev) => [
-                  ...prev,
-                  {
-                    id: `${Date.now()}`,
-                    source: tableDataSource,
-                    copperPrice: cu,
-                    silverPricePerGram: agPerGram,
-                    profitPerTon,
-                    annualProfit,
-                    costPerTon,
-                    copperGrade: safeParseNumber(inputs.copperGradePercent, 2.5),
-                    silverGrade: safeParseNumber(inputs.silverGradePercent, 0.008),
-                    recovery: safeParseNumber(inputs.recoveryPercent, 85),
-                    annualTonnage10k: annual10k
-                  }
-                ]);
-              }}
+              onClick={() => addCurrentToTable(priceMode)}
             >
               将当前数据加入表格
             </button>
           </div>
-        )}
-
-        {priceMode === 'table' && (
-          <div className="data-table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>序号</th>
-                  <th>铜价 (元/吨)</th>
-                  <th>银价 (元/克)</th>
-                  <th>每吨利润 (元/吨)</th>
-                  <th>年利润 (元/年)</th>
-                  <th>综合成本 (元/吨)</th>
-                  <th>铜品位 (%)</th>
-                  <th>银品位 (%)</th>
-                  <th>回收率 (%)</th>
-                  <th>年开采量 (万吨)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tableRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={10} className="data-table-empty">
-                      点击「将当前数据加入表格」可把当前参数与利润按所选数据来源加入下表
-                    </td>
-                  </tr>
-                ) : (
-                  tableRows.map((row, index) => (
-                    <tr key={row.id}>
-                      <td>{index + 1}</td>
-                      <td>{row.copperPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
-                      <td>{row.silverPricePerGram.toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>
-                      <td className={row.profitPerTon >= 0 ? 'positive' : 'negative'}>
-                        {row.profitPerTon.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                      </td>
-                      <td className={row.annualProfit >= 0 ? 'positive' : 'negative'}>
-                        {row.annualProfit.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                      </td>
-                      <td>{row.costPerTon.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
-                      <td>{row.copperGrade}</td>
-                      <td>{row.silverGrade}</td>
-                      <td>{row.recovery}</td>
-                      <td>{row.annualTonnage10k.toLocaleString('en-US', { maximumFractionDigits: 1 })}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
 
         {priceMode === 'manual' && (
           <div className="manual-price-controls">
@@ -409,13 +367,29 @@ export const ProfitDashboard: React.FC = () => {
               </div>
               <div className="manual-input-row">
                 <input
-                  type="number"
-                  value={manualCopperPrice}
+                  type="text"
+                  inputMode="numeric"
+                  value={manualCopperInputDisplay}
                   onChange={(e) => {
                     setHasUserEditedManualPrices(true);
-                    setManualCopperPrice(
-                      safeParseNumber(e.target.value, manualCopperPrice)
-                    );
+                    const v = e.target.value;
+                    setManualCopperInputDisplay(v);
+                    const n = Number(v.replace(/,/g, ''));
+                    if (v === '' || v === '-') return;
+                    if (Number.isFinite(n) && n >= 0) setManualCopperPrice(n);
+                  }}
+                  onBlur={() => {
+                    const v = manualCopperInputDisplay.trim();
+                    if (v === '') {
+                      setManualCopperPrice(0);
+                      setManualCopperInputDisplay('');
+                    } else {
+                      const n = Number(v.replace(/,/g, ''));
+                      if (Number.isFinite(n) && n >= 0) {
+                        setManualCopperPrice(n);
+                        setManualCopperInputDisplay(String(n));
+                      }
+                    }
                   }}
                 />
                 <input
@@ -426,9 +400,9 @@ export const ProfitDashboard: React.FC = () => {
                   value={manualCopperPrice}
                   onChange={(e) => {
                     setHasUserEditedManualPrices(true);
-                    setManualCopperPrice(
-                      safeParseNumber(e.target.value, manualCopperPrice)
-                    );
+                    const n = safeParseNumber(e.target.value, manualCopperPrice);
+                    setManualCopperPrice(n);
+                    setManualCopperInputDisplay(String(n));
                   }}
                 />
               </div>
@@ -440,13 +414,29 @@ export const ProfitDashboard: React.FC = () => {
               </div>
               <div className="manual-input-row">
                 <input
-                  type="number"
-                  value={manualSilverPricePerGram}
+                  type="text"
+                  inputMode="decimal"
+                  value={manualSilverInputDisplay}
                   onChange={(e) => {
                     setHasUserEditedManualPrices(true);
-                    setManualSilverPricePerGram(
-                      safeParseNumber(e.target.value, manualSilverPricePerGram)
-                    );
+                    const v = e.target.value;
+                    setManualSilverInputDisplay(v);
+                    if (v === '' || v === '-') return;
+                    const n = parseFloat(v);
+                    if (Number.isFinite(n) && n >= 0) setManualSilverPricePerGram(n);
+                  }}
+                  onBlur={() => {
+                    const v = manualSilverInputDisplay.trim();
+                    if (v === '') {
+                      setManualSilverPricePerGram(0);
+                      setManualSilverInputDisplay('');
+                    } else {
+                      const n = parseFloat(v);
+                      if (Number.isFinite(n) && n >= 0) {
+                        setManualSilverPricePerGram(n);
+                        setManualSilverInputDisplay(String(n));
+                      }
+                    }
                   }}
                 />
                 <input
@@ -457,9 +447,9 @@ export const ProfitDashboard: React.FC = () => {
                   value={manualSilverPricePerGram}
                   onChange={(e) => {
                     setHasUserEditedManualPrices(true);
-                    setManualSilverPricePerGram(
-                      safeParseNumber(e.target.value, manualSilverPricePerGram)
-                    );
+                    const n = safeParseNumber(e.target.value, manualSilverPricePerGram);
+                    setManualSilverPricePerGram(n);
+                    setManualSilverInputDisplay(String(n));
                   }}
                 />
               </div>
@@ -467,7 +457,6 @@ export const ProfitDashboard: React.FC = () => {
           </div>
         )}
 
-        {priceMode !== 'table' && (
         <div className="metrics-grid">
           <div className="metric">
             <div className="metric-label">铜价 (元/吨)</div>
@@ -546,7 +535,6 @@ export const ProfitDashboard: React.FC = () => {
             </div>
           </div>
         </div>
-        )}
         {priceMode === 'auto' && (
           <div className="card-disclaimer">
             自动模式目前尚在完善中，价格可能不准，仅供参考
@@ -554,6 +542,79 @@ export const ProfitDashboard: React.FC = () => {
         )}
       </section>
     </div>
+
+    <div className="table-strip">
+      <div className="table-strip-header">
+        <span className="table-strip-title">数据表格</span>
+        <button
+          type="button"
+          className="primary-button primary-button-small secondary"
+          onClick={exportTableToExcel}
+          disabled={tableRows.length === 0}
+        >
+          导出 Excel
+        </button>
+      </div>
+      <div className="data-table-wrap">
+        <table className="data-table">
+          <colgroup>
+            <col style={{ width: '4%' }} />
+            <col style={{ width: '12%' }} />
+            <col style={{ width: '10%' }} />
+            <col style={{ width: '12%' }} />
+            <col style={{ width: '14%' }} />
+            <col style={{ width: '11%' }} />
+            <col style={{ width: '9%' }} />
+            <col style={{ width: '9%' }} />
+            <col style={{ width: '9%' }} />
+            <col style={{ width: '10%' }} />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>序号</th>
+              <th>铜价 (元/吨)</th>
+              <th>银价 (元/克)</th>
+              <th>每吨利润 (元/吨)</th>
+              <th>年利润 (元/年)</th>
+              <th>综合成本 (元/吨)</th>
+              <th>铜品位 (%)</th>
+              <th>银品位 (%)</th>
+              <th>回收率 (%)</th>
+              <th>年开采量 (万吨)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tableRows.length === 0 ? (
+              <tr>
+                <td colSpan={10} className="data-table-empty">
+                  点击「将当前数据加入表格」可把当前参数与利润加入下表
+                </td>
+              </tr>
+            ) : (
+              tableRows.map((row, index) => (
+                <tr key={row.id}>
+                  <td>{index + 1}</td>
+                  <td>{row.copperPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+                  <td>{row.silverPricePerGram.toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>
+                  <td className={row.profitPerTon >= 0 ? 'positive' : 'negative'}>
+                    {row.profitPerTon.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                  </td>
+                  <td className={row.annualProfit >= 0 ? 'positive' : 'negative'}>
+                    {row.annualProfit.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                  </td>
+                  <td>{row.costPerTon.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+                  <td>{row.copperGrade}</td>
+                  <td>{row.silverGrade}</td>
+                  <td>{row.recovery}</td>
+                  <td>{row.annualTonnage10k.toLocaleString('en-US', { maximumFractionDigits: 1 })}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    </>
   );
 };
 

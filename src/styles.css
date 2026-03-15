@@ -140,6 +140,11 @@ body {
   color: #94a3b8;
 }
 
+.add-to-table-row {
+  margin-top: 10px;
+  margin-bottom: 4px;
+}
+
 .table-mode-controls {
   margin-top: 10px;
   margin-bottom: 12px;
@@ -173,35 +178,75 @@ body {
   font-size: 12px;
 }
 
-.data-table-wrap {
-  margin-top: 8px;
-  overflow-x: auto;
+.primary-button.secondary {
+  background: transparent;
+  border-color: rgba(148, 163, 184, 0.7);
+  box-shadow: none;
+}
+
+.primary-button.secondary:hover:not(:disabled) {
+  background: rgba(148, 163, 184, 0.15);
+  border-color: rgba(148, 163, 184, 0.9);
+}
+
+.table-strip {
+  margin-top: 24px;
+  width: 100%;
   border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.5);
   background: rgba(15, 23, 42, 0.6);
+  overflow: hidden;
+}
+
+.table-strip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.table-strip-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.data-table-wrap {
+  margin-top: 0;
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  overflow: hidden;
+}
+
+.table-strip .data-table-wrap {
+  margin-top: 0;
 }
 
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 11px;
+  table-layout: fixed;
 }
 
 .data-table th,
 .data-table td {
-  padding: 8px 10px;
+  padding: 6px 6px;
   text-align: right;
   border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .data-table th:first-child,
 .data-table td:first-child {
   text-align: center;
-  min-width: 2.5em;
+  width: 2.8em;
 }
 
 .data-table th {
-  text-align: right;
   font-weight: 600;
   color: #94a3b8;
   background: rgba(15, 23, 42, 0.8);
@@ -391,13 +436,18 @@ body {
   align-items: center;
 }
 
-.manual-input-row input[type='number'] {
+.manual-input-row input[type='number'],
+.manual-input-row input[type='text'] {
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.7);
   padding: 6px 10px;
   background: rgba(15, 23, 42, 0.85);
   color: #e5e7eb;
   font-size: 12px;
+}
+
+.manual-input-row input::placeholder {
+  color: #64748b;
 }
 
 .manual-input-row input[type='range'] {
