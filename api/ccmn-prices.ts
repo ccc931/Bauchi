@@ -5,29 +5,42 @@
 
 const CCMN_INDEX_URL = 'https://www.ccmn.cn/index_table/';
 
-// 从表格文本中解析 1#铜 均价（元/吨）、1#白银 均价（元/千克）
+// 表格列：品名 | 价格区间 | 均价 | 涨跌 | 单位。优先取「长江现货」表格中的数据
 function parsePricesFromHtml(html: string): {
   copperPerTonRmb: number | null;
   silverPerKgRmb: number | null;
 } {
   let copperPerTonRmb: number | null = null;
   let silverPerKgRmb: number | null = null;
+  const xianhuoBlock = html.match(/长江现货[\s\S]*?(?=长江综合|历史价格|$)/i);
+  const block = (xianhuoBlock && xianhuoBlock[0]) ? xianhuoBlock[0] : html;
 
-  // 1#铜：取均价列（表格中第三列数字，5~6 位）
-  const copperMatch = html.match(/1#铜[\s\S]{0,300}?(\d{5,6})[\s\S]{0,150}?元\/吨/);
-  if (copperMatch) {
-    const n = Number(copperMatch[1]);
-    if (Number.isFinite(n)) copperPerTonRmb = n;
+  let copperMatch = block.match(/1#铜[\s\S]*?\d{5,6}-\d{5,6}[\s\S]*?(\d{5,6})[\s\S]*?元\/吨/);
+  if (copperMatch) copperPerTonRmb = Number(copperMatch[1]);
+  if (copperPerTonRmb == null || !Number.isFinite(copperPerTonRmb)) {
+    copperMatch = html.match(/1#铜[\s\S]*?\d{5,6}-\d{5,6}[\s\S]*?(\d{5,6})[\s\S]*?元\/吨/);
+    if (copperMatch) copperPerTonRmb = Number(copperMatch[1]);
+  }
+  if (copperPerTonRmb == null || !Number.isFinite(copperPerTonRmb)) {
+    copperMatch = html.match(/<td[^>]*>1#铜<\/td>\s*<td[^>]*>[^<]*<\/td>\s*<td[^>]*>(\d+)/);
+    if (copperMatch) copperPerTonRmb = Number(copperMatch[1]);
   }
 
-  // 1#白银：取均价列，单位 元/千克（4~5 位）
-  const silverMatch = html.match(/1#白银[\s\S]{0,300}?(\d{4,5})[\s\S]{0,150}?元\/千克/);
-  if (silverMatch) {
-    const n = Number(silverMatch[1]);
-    if (Number.isFinite(n)) silverPerKgRmb = n;
+  let silverMatch = block.match(/1#白银[\s\S]*?\d{4,5}-\d{4,5}[\s\S]*?(\d{4,5})[\s\S]*?元\/千克/);
+  if (silverMatch) silverPerKgRmb = Number(silverMatch[1]);
+  if (silverPerKgRmb == null || !Number.isFinite(silverPerKgRmb)) {
+    silverMatch = html.match(/1#白银[\s\S]*?\d{4,5}-\d{4,5}[\s\S]*?(\d{4,5})[\s\S]*?元\/千克/);
+    if (silverMatch) silverPerKgRmb = Number(silverMatch[1]);
+  }
+  if (silverPerKgRmb == null || !Number.isFinite(silverPerKgRmb)) {
+    silverMatch = html.match(/<td[^>]*>1#白银<\/td>\s*<td[^>]*>[^<]*<\/td>\s*<td[^>]*>(\d+)/);
+    if (silverMatch) silverPerKgRmb = Number(silverMatch[1]);
   }
 
-  return { copperPerTonRmb, silverPerKgRmb };
+  return {
+    copperPerTonRmb: Number.isFinite(copperPerTonRmb) ? copperPerTonRmb : null,
+    silverPerKgRmb: Number.isFinite(silverPerKgRmb) ? silverPerKgRmb : null,
+  };
 }
 
 export default async function handler(req: unknown, res: unknown) {
