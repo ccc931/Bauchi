@@ -103,9 +103,45 @@ Profit\_{USD} = Revenue - Cost\_total
 
 再根据汇率折算为 NGN。
 
-## 通过网址发布（推荐：Cloudflare Pages）
+## 国内部署（推荐：打开快、不卡）
 
-希望用户通过一个网址就能打开时，推荐用 **Cloudflare Pages** 部署（免费、HTTPS、国内访问通常更稳定，价格接口会一起生效）。若 Vercel 在你或用户网络下打不开或一直加载，可改用本方式。
+若 Vercel / Cloudflare 在你或用户网络下**打不开或一直卡在加载**，建议把网站放到**国内**托管，访问会快很多。
+
+### 方式一：仅静态部署（最简单，页面秒开）
+
+只部署前端静态文件，不配置价格接口。**自动模式**会使用模拟数据（页面上会提示），**手动模式**和**表格、导出**都正常用。
+
+1. **本地打包**
+   ```bash
+   npm install
+   npm run build
+   ```
+   得到 `dist` 目录。
+
+2. **上传到腾讯云 COS（对象存储）**
+   - 登录 [腾讯云控制台](https://console.cloud.tencent.com/cos) → 对象存储 → 创建存储桶（选「公有读」、选一个国内地域，如广州）。
+   - 进入该存储桶 → **基础配置** → 开启 **静态网站**，索引页填 `index.html`，错误文档可填 `index.html`（方便前端路由）。
+   - 在 **文件列表** 里上传 `dist` 里的**全部文件**（保持目录结构：根目录是 `index.html` 和 `assets` 文件夹等）。
+   - 在 **基础配置** 里找到 **访问域名**（如 `xxx.cos.ap-guangzhou.myqcloud.com`），这就是网站地址：`https://该域名`。
+
+3. **（可选）开启 CDN 加速**
+   - 在 **域名与传输管理** 里可绑定自定义域名并开启 CDN，国内访问更快；若先用默认 COS 域名也可以。
+
+把得到的 **`https://xxx.cos.xxx.myqcloud.com`** 发给用户即可，用浏览器打开即可使用。
+
+### 方式二：自动模式也用真实长江有色价格（推荐，一步到位）
+
+**直接按「方法二」做**：国内 COS 放前端 + 腾讯云 SCF 提供价格接口，用户打开快且自动模式用真实长江有色数据。
+
+- **完整操作清单（一步步照做）**：[docs/国内部署-方法二-操作清单.md](docs/国内部署-方法二-操作清单.md)
+- **环境变量**：复制根目录的 **`.env.production.example`** 为 **`.env.production`**，把 `VITE_CCMN_API_BASE` 改成你的 API 网关地址（仅域名，不要带路径），再执行 `npm run build` 后把 `dist` 上传到 COS。
+- **云函数代码**：`scf/ccmn-prices/index.js`（Node 16/18 均可，打成 zip 上传到 SCF，API 网关路径设为 `/api/ccmn-prices`）。
+
+---
+
+## 通过网址发布（海外：Cloudflare Pages）
+
+若你的用户主要在海外，或想用 Git 自动部署，可用 **Cloudflare Pages**。
 
 ### 步骤一：把代码推到 GitHub
 

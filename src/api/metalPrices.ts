@@ -17,11 +17,18 @@ export interface FetchMetalPricesOptions {
 const CCMN_API_PATH = '/api/ccmn-prices';
 
 async function fetchCcmnPrices(): Promise<MetalPriceSnapshot> {
-  const base =
-    typeof import.meta.env.VITE_CCMN_API_BASE === 'string'
-      ? import.meta.env.VITE_CCMN_API_BASE
-      : '';
-  const res = await fetch(`${base}${CCMN_API_PATH}`);
+  const fullUrl =
+    typeof import.meta.env.VITE_CCMN_API_URL === 'string' &&
+    import.meta.env.VITE_CCMN_API_URL.length > 0
+      ? import.meta.env.VITE_CCMN_API_URL
+      : (() => {
+          const base =
+            typeof import.meta.env.VITE_CCMN_API_BASE === 'string'
+              ? import.meta.env.VITE_CCMN_API_BASE
+              : '';
+          return `${base}${CCMN_API_PATH}`;
+        })();
+  const res = await fetch(fullUrl);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(
