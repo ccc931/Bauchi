@@ -103,12 +103,55 @@ Profit\_{USD} = Revenue - Cost\_total
 
 再根据汇率折算为 NGN。
 
-## 部署建议
+## 通过网址发布（推荐：Vercel）
 
-- **轻量使用 / 内部评估**：可以直接将构建后的静态文件部署到任意静态网站托管（如 Nginx、静态对象存储）。
-- **需要隐藏 API Key 时**：
-  - 将金属价格数据源放在后端（例如简单的 Node/Express、Python/FastAPI 或云函数），前端只调用你自建的 `/api/metal-prices` 接口；
-  - 在后端读取真实 API Key，前端无需接触。
+希望用户通过一个网址就能打开时，推荐用 **Vercel** 部署（免费、带 HTTPS，且项目里的价格接口 `/api/ccmn-prices` 会一起生效）。
+
+### 步骤一：把代码放到 GitHub
+
+1. 在 [GitHub](https://github.com) 新建一个仓库（如 `bauchi-profit`）。
+2. 在项目根目录执行：
+
+```bash
+git init
+git add .
+git commit -m "Initial commit"
+git branch -M main
+git remote add origin https://github.com/你的用户名/bauchi-profit.git
+git push -u origin main
+```
+
+### 步骤二：在 Vercel 里导入并部署
+
+1. 打开 [vercel.com](https://vercel.com)，用 GitHub 账号登录。
+2. 点击 **Add New… → Project**，在列表里选刚推送的仓库（如 `bauchi-profit`）。
+3. 保持默认即可（Vercel 会自动识别 Vite）：
+   - **Build Command**：`npm run build`
+   - **Output Directory**：`dist`
+   - **Install Command**：`npm install`
+4. 点击 **Deploy**，等一两分钟。
+5. 部署完成后会给你一个地址，例如：`https://bauchi-profit-xxx.vercel.app`。
+
+把这个链接发给用户，他们用浏览器打开即可使用；自动模式会通过站内的 `/api/ccmn-prices` 拉取长江有色价格，无需再配置。
+
+### 之后更新网站
+
+改完代码后执行：
+
+```bash
+git add .
+git commit -m "更新说明"
+git push
+```
+
+Vercel 会按你连接的仓库自动重新构建、发布，网址不变。
+
+---
+
+## 其他部署方式
+
+- **轻量使用 / 内部评估**：也可以把 `npm run build` 生成的 `dist` 目录部署到任意静态托管（如 Nginx、对象存储）。
+- **需要隐藏 API Key 时**：将金属价格接口放在自己的后端（Node/Express、云函数等），前端只请求你的 `/api/metal-prices`。
 
 ## 后续可扩展方向
 
