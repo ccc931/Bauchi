@@ -12,8 +12,9 @@ function parsePricesFromHtml(html: string): {
 } {
   let copperPerTonRmb: number | null = null;
   let silverPerKgRmb: number | null = null;
-  const xianhuoBlock = html.match(/长江现货[\s\S]*?(?=长江综合|历史价格|$)/i);
-  const block = (xianhuoBlock && xianhuoBlock[0]) ? xianhuoBlock[0] : html;
+  // 优先解析「长江综合」表格区域；若未匹配到则退回全文
+  const cjzhBlock = html.match(/长江综合[\s\S]*?(?=长江现货|历史价格|$)/i);
+  const block = (cjzhBlock && cjzhBlock[0]) ? cjzhBlock[0] : html;
 
   // 可能同时包含多天/多个 1#铜 行，取“最后一个匹配”的均价，尽量对应最新的一行
   const copperMatches = Array.from(
