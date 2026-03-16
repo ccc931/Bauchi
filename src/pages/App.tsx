@@ -6,7 +6,7 @@ export const App: React.FC = () => {
     <div className="app-root">
       <header className="app-header">
         <div>
-          <h1>尼日利亚 Bauchi 铜矿实时利润平台</h1>
+          <h1>尼日利亚 Bauchi 铜矿利润动态分析</h1>
           <p className="subtitle">实时追踪国际金属价格，评估项目盈利能力</p>
         </div>
       </header>
