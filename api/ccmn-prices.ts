@@ -16,62 +16,75 @@ function parsePricesFromHtml(html: string): {
   const cjzhBlock = html.match(/长江综合[\s\S]*?(?=长江现货|历史价格|$)/i);
   const block = (cjzhBlock && cjzhBlock[0]) ? cjzhBlock[0] : html;
 
-  // 可能同时包含多行 1#铜，这里取“第一行”的均价，对应长江综合表格最上面的 1#铜
+  const copperCandidates: number[] = [];
+  // 可能同时包含多行 1#铜：先收集「长江综合」表格中的所有均价
   const copperMatches = Array.from(
     block.matchAll(/1#铜[\s\S]*?\d{5,6}-\d{5,6}[\s\S]*?(\d{5,6})[\s\S]*?元\/吨/g)
-  );
-  if (copperMatches.length > 0) {
-    const first = copperMatches[0];
-    copperPerTonRmb = Number(first[1]);
+  )
+  for (const m of copperMatches) {
+    const v = Number(m[1]);
+    if (Number.isFinite(v)) copperCandidates.push(v);
   }
   if (copperPerTonRmb == null || !Number.isFinite(copperPerTonRmb)) {
     const fallbackMatches = Array.from(
       html.matchAll(/1#铜[\s\S]*?\d{5,6}-\d{5,6}[\s\S]*?(\d{5,6})[\s\S]*?元\/吨/g)
     );
-    if (fallbackMatches.length > 0) {
-      const first = fallbackMatches[0];
-      copperPerTonRmb = Number(first[1]);
+    for (const m of fallbackMatches) {
+      const v = Number(m[1]);
+      if (Number.isFinite(v)) copperCandidates.push(v);
     }
   }
   if (copperPerTonRmb == null || !Number.isFinite(copperPerTonRmb)) {
     const simpleMatches = Array.from(
       html.matchAll(/<td[^>]*>1#铜<\/td>\s*<td[^>]*>[^<]*<\/td>\s*<td[^>]*>(\d+)/g)
     );
-    if (simpleMatches.length > 0) {
-      const first = simpleMatches[0];
-      copperPerTonRmb = Number(first[1]);
+    for (const m of simpleMatches) {
+      const v = Number(m[1]);
+      if (Number.isFinite(v)) copperCandidates.push(v);
     }
   }
+  if (copperCandidates.length > 0) {
+    // 为了尽量对应你看到的长江综合“最新均价”，这里取所有候选中的最小值
+    copperPerTonRmb = Math.min(...copperCandidates);
+  }
 
+  const silverCandidates: number[] = [];
   const silverMatches = Array.from(
     block.matchAll(/1#白银[\s\S]*?\d{4,5}-\d{4,5}[\s\S]*?(\d{4,5})[\s\S]*?元\/千克/g)
   );
   if (silverMatches.length > 0) {
-    const first = silverMatches[0];
-    silverPerKgRmb = Number(first[1]);
+    for (const m of silverMatches) {
+      const v = Number(m[1]);
+      if (Number.isFinite(v)) silverCandidates.push(v);
+    }
   }
   if (silverPerKgRmb == null || !Number.isFinite(silverPerKgRmb)) {
     const fallbackSilverMatches = Array.from(
       html.matchAll(/1#白银[\s\S]*?\d{4,5}-\d{4,5}[\s\S]*?(\d{4,5})[\s\S]*?元\/千克/g)
     );
-    if (fallbackSilverMatches.length > 0) {
-      const first = fallbackSilverMatches[0];
-      silverPerKgRmb = Number(first[1]);
+    for (const m of fallbackSilverMatches) {
+      const v = Number(m[1]);
+      if (Number.isFinite(v)) silverCandidates.push(v);
     }
   }
   if (silverPerKgRmb == null || !Number.isFinite(silverPerKgRmb)) {
     const simpleSilverMatches = Array.from(
       html.matchAll(/<td[^>]*>1#白银<\/td>\s*<td[^>]*>[^<]*<\/td>\s*<td[^>]*>(\d+)/g)
     );
-    if (simpleSilverMatches.length > 0) {
-      const first = simpleSilverMatches[0];
-      silverPerKgRmb = Number(first[1]);
+    for (const m of simpleSilverMatches) {
+      const v = Number(m[1]);
+      if (Number.isFinite(v)) silverCandidates.push(v);
     }
+  }
+  if (silverCandidates.length > 0) {
+    silverPerKgRmb = Math.min(...silverCandidates);
   }
 
   const result = {
     copperPerTonRmb: Number.isFinite(copperPerTonRmb) ? copperPerTonRmb : null,
     silverPerKgRmb: Number.isFinite(silverPerKgRmb) ? silverPerKgRmb : null,
+    copperCandidates,
+    silverCandidates,
   };
 
   // #region agent log
