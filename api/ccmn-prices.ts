@@ -15,26 +15,57 @@ function parsePricesFromHtml(html: string): {
   const xianhuoBlock = html.match(/长江现货[\s\S]*?(?=长江综合|历史价格|$)/i);
   const block = (xianhuoBlock && xianhuoBlock[0]) ? xianhuoBlock[0] : html;
 
-  let copperMatch = block.match(/1#铜[\s\S]*?\d{5,6}-\d{5,6}[\s\S]*?(\d{5,6})[\s\S]*?元\/吨/);
-  if (copperMatch) copperPerTonRmb = Number(copperMatch[1]);
-  if (copperPerTonRmb == null || !Number.isFinite(copperPerTonRmb)) {
-    copperMatch = html.match(/1#铜[\s\S]*?\d{5,6}-\d{5,6}[\s\S]*?(\d{5,6})[\s\S]*?元\/吨/);
-    if (copperMatch) copperPerTonRmb = Number(copperMatch[1]);
+  // 可能同时包含多天/多个 1#铜 行，取“最后一个匹配”的均价，尽量对应最新的一行
+  const copperMatches = Array.from(
+    block.matchAll(/1#铜[\s\S]*?\d{5,6}-\d{5,6}[\s\S]*?(\d{5,6})[\s\S]*?元\/吨/g)
+  );
+  if (copperMatches.length > 0) {
+    const last = copperMatches[copperMatches.length - 1];
+    copperPerTonRmb = Number(last[1]);
   }
   if (copperPerTonRmb == null || !Number.isFinite(copperPerTonRmb)) {
-    copperMatch = html.match(/<td[^>]*>1#铜<\/td>\s*<td[^>]*>[^<]*<\/td>\s*<td[^>]*>(\d+)/);
-    if (copperMatch) copperPerTonRmb = Number(copperMatch[1]);
+    const fallbackMatches = Array.from(
+      html.matchAll(/1#铜[\s\S]*?\d{5,6}-\d{5,6}[\s\S]*?(\d{5,6})[\s\S]*?元\/吨/g)
+    );
+    if (fallbackMatches.length > 0) {
+      const last = fallbackMatches[fallbackMatches.length - 1];
+      copperPerTonRmb = Number(last[1]);
+    }
+  }
+  if (copperPerTonRmb == null || !Number.isFinite(copperPerTonRmb)) {
+    const simpleMatches = Array.from(
+      html.matchAll(/<td[^>]*>1#铜<\/td>\s*<td[^>]*>[^<]*<\/td>\s*<td[^>]*>(\d+)/g)
+    );
+    if (simpleMatches.length > 0) {
+      const last = simpleMatches[simpleMatches.length - 1];
+      copperPerTonRmb = Number(last[1]);
+    }
   }
 
-  let silverMatch = block.match(/1#白银[\s\S]*?\d{4,5}-\d{4,5}[\s\S]*?(\d{4,5})[\s\S]*?元\/千克/);
-  if (silverMatch) silverPerKgRmb = Number(silverMatch[1]);
-  if (silverPerKgRmb == null || !Number.isFinite(silverPerKgRmb)) {
-    silverMatch = html.match(/1#白银[\s\S]*?\d{4,5}-\d{4,5}[\s\S]*?(\d{4,5})[\s\S]*?元\/千克/);
-    if (silverMatch) silverPerKgRmb = Number(silverMatch[1]);
+  const silverMatches = Array.from(
+    block.matchAll(/1#白银[\s\S]*?\d{4,5}-\d{4,5}[\s\S]*?(\d{4,5})[\s\S]*?元\/千克/g)
+  );
+  if (silverMatches.length > 0) {
+    const last = silverMatches[silverMatches.length - 1];
+    silverPerKgRmb = Number(last[1]);
   }
   if (silverPerKgRmb == null || !Number.isFinite(silverPerKgRmb)) {
-    silverMatch = html.match(/<td[^>]*>1#白银<\/td>\s*<td[^>]*>[^<]*<\/td>\s*<td[^>]*>(\d+)/);
-    if (silverMatch) silverPerKgRmb = Number(silverMatch[1]);
+    const fallbackSilverMatches = Array.from(
+      html.matchAll(/1#白银[\s\S]*?\d{4,5}-\d{4,5}[\s\S]*?(\d{4,5})[\s\S]*?元\/千克/g)
+    );
+    if (fallbackSilverMatches.length > 0) {
+      const last = fallbackSilverMatches[fallbackSilverMatches.length - 1];
+      silverPerKgRmb = Number(last[1]);
+    }
+  }
+  if (silverPerKgRmb == null || !Number.isFinite(silverPerKgRmb)) {
+    const simpleSilverMatches = Array.from(
+      html.matchAll(/<td[^>]*>1#白银<\/td>\s*<td[^>]*>[^<]*<\/td>\s*<td[^>]*>(\d+)/g)
+    );
+    if (simpleSilverMatches.length > 0) {
+      const last = simpleSilverMatches[simpleSilverMatches.length - 1];
+      silverPerKgRmb = Number(last[1]);
+    }
   }
 
   return {
