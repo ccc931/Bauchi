@@ -28,6 +28,26 @@ async function fetchCcmnPrices(): Promise<MetalPriceSnapshot> {
               : '';
           return `${base}${CCMN_API_PATH}`;
         })();
+
+  // #region agent log
+  fetch('http://127.0.0.1:7807/ingest/e62c4c76-cd41-4c95-873a-5b8fdc1fcaa1', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Debug-Session-Id': 'ff78e6'
+    },
+    body: JSON.stringify({
+      sessionId: 'ff78e6',
+      runId: 'pre-fix',
+      hypothesisId: 'A',
+      location: 'src/api/metalPrices.ts:fetchCcmnPrices:url',
+      message: 'fetchCcmnPrices request URL',
+      data: { fullUrl },
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+  // #endregion
+
   const res = await fetch(fullUrl);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -41,6 +61,31 @@ async function fetchCcmnPrices(): Promise<MetalPriceSnapshot> {
     copperPerTonRmb: number;
     silverPerKgRmb: number;
   };
+
+  // #region agent log
+  fetch('http://127.0.0.1:7807/ingest/e62c4c76-cd41-4c95-873a-5b8fdc1fcaa1', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Debug-Session-Id': 'ff78e6'
+    },
+    body: JSON.stringify({
+      sessionId: 'ff78e6',
+      runId: 'pre-fix',
+      hypothesisId: 'B',
+      location: 'src/api/metalPrices.ts:fetchCcmnPrices:response',
+      message: 'fetchCcmnPrices raw response',
+      data: {
+        timestamp: data.timestamp,
+        baseCurrency: data.baseCurrency,
+        copperPerTonRmb: data.copperPerTonRmb,
+        silverPerKgRmb: data.silverPerKgRmb
+      },
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+  // #endregion
+
   const metals: { symbol: MetalSymbol; name: string; currency: string; pricePerTon: number }[] = [];
   if (data.copperPerTonRmb != null) {
     metals.push({

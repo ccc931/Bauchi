@@ -69,10 +69,31 @@ function parsePricesFromHtml(html: string): {
     }
   }
 
-  return {
+  const result = {
     copperPerTonRmb: Number.isFinite(copperPerTonRmb) ? copperPerTonRmb : null,
     silverPerKgRmb: Number.isFinite(silverPerKgRmb) ? silverPerKgRmb : null,
   };
+
+  // #region agent log
+  fetch('http://127.0.0.1:7807/ingest/e62c4c76-cd41-4c95-873a-5b8fdc1fcaa1', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Debug-Session-Id': 'ff78e6',
+    },
+    body: JSON.stringify({
+      sessionId: 'ff78e6',
+      runId: 'pre-fix',
+      hypothesisId: 'Vercel-parse',
+      location: 'api/ccmn-prices.ts:parsePricesFromHtml',
+      message: 'Parsed prices from CCMN HTML (Vercel)',
+      data: result,
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+
+  return result;
 }
 
 export default async function handler(req: unknown, res: unknown) {
@@ -96,6 +117,25 @@ export default async function handler(req: unknown, res: unknown) {
     }
     const html = await response.text();
     const { copperPerTonRmb, silverPerKgRmb } = parsePricesFromHtml(html);
+
+    // #region agent log
+    fetch('http://127.0.0.1:7807/ingest/e62c4c76-cd41-4c95-873a-5b8fdc1fcaa1', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Debug-Session-Id': 'ff78e6',
+      },
+      body: JSON.stringify({
+        sessionId: 'ff78e6',
+        runId: 'pre-fix',
+        hypothesisId: 'Vercel-handler',
+        location: 'api/ccmn-prices.ts:handler',
+        message: 'Handler parsed prices result (Vercel)',
+        data: { copperPerTonRmb, silverPerKgRmb },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
 
     if (copperPerTonRmb == null && silverPerKgRmb == null) {
       throw new Error('未能从页面解析出铜或白银价格');

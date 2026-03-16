@@ -7,6 +7,7 @@
  */
 
 const https = require('https');
+const fs = require('fs');
 
 const CCMN_INDEX_URL = 'https://www.ccmn.cn/index_table/';
 
@@ -32,35 +33,106 @@ function fetchUrl(url) {
 function parsePricesFromHtml(html) {
   let copperPerTonRmb = null;
   let silverPerKgRmb = null;
-  const xianhuoBlock = html.match(/长江现货[\s\S]*?(?=长江综合|历史价格|$)/i);
-  const block = (xianhuoBlock && xianhuoBlock[0]) ? xianhuoBlock[0] : html;
 
-  let copperMatch = block.match(/1#铜[\s\S]*?\d{5,6}-\d{5,6}[\s\S]*?(\d{5,6})[\s\S]*?元\/吨/);
-  if (copperMatch) copperPerTonRmb = Number(copperMatch[1]);
+  // 优先锁定「长江综合」这一块，避免抓到其它表格的数据
+  const cjzhBlockMatch = html.match(/长江综合[\s\S]*?(?=长江现货|历史价格|$)/i);
+  const block = cjzhBlockMatch && cjzhBlockMatch[0] ? cjzhBlockMatch[0] : html;
+
+  // 1#铜：匹配所有出现的行，取最后一条（通常是当天均价）
+  const copperMatches = Array.from(
+    block.matchAll(
+      /1#铜[\s\S]*?\d{5,6}-\d{5,6}[\s\S]*?(\d{5,6})[\s\S]*?元\/吨/g
+    )
+  );
+  if (copperMatches.length > 0) {
+    copperPerTonRmb = Number(copperMatches[copperMatches.length - 1][1]);
+  }
   if (copperPerTonRmb == null || !Number.isFinite(copperPerTonRmb)) {
-    copperMatch = html.match(/1#铜[\s\S]*?\d{5,6}-\d{5,6}[\s\S]*?(\d{5,6})[\s\S]*?元\/吨/);
-    if (copperMatch) copperPerTonRmb = Number(copperMatch[1]);
+    const fallbackCopperMatches = Array.from(
+      html.matchAll(
+        /1#铜[\s\S]*?\d{5,6}-\d{5,6}[\s\S]*?(\d{5,6})[\s\S]*?元\/吨/g
+      )
+    );
+    if (fallbackCopperMatches.length > 0) {
+      copperPerTonRmb = Number(
+        fallbackCopperMatches[fallbackCopperMatches.length - 1][1]
+      );
+    }
   }
   if (copperPerTonRmb == null || !Number.isFinite(copperPerTonRmb)) {
-    copperMatch = html.match(/<td[^>]*>1#铜<\/td>\s*<td[^>]*>[^<]*<\/td>\s*<td[^>]*>(\d+)/);
-    if (copperMatch) copperPerTonRmb = Number(copperMatch[1]);
+    const simpleCopperMatches = Array.from(
+      html.matchAll(
+        /<td[^>]*>1#铜<\/td>\s*<td[^>]*>[^<]*<\/td>\s*<td[^>]*>(\d+)/g
+      )
+    );
+    if (simpleCopperMatches.length > 0) {
+      copperPerTonRmb = Number(
+        simpleCopperMatches[simpleCopperMatches.length - 1][1]
+      );
+    }
   }
 
-  let silverMatch = block.match(/1#白银[\s\S]*?\d{4,5}-\d{4,5}[\s\S]*?(\d{4,5})[\s\S]*?元\/千克/);
-  if (silverMatch) silverPerKgRmb = Number(silverMatch[1]);
-  if (silverPerKgRmb == null || !Number.isFinite(silverPerKgRmb)) {
-    silverMatch = html.match(/1#白银[\s\S]*?\d{4,5}-\d{4,5}[\s\S]*?(\d{4,5})[\s\S]*?元\/千克/);
-    if (silverMatch) silverPerKgRmb = Number(silverMatch[1]);
+  // 1#白银：同样逻辑，取「长江综合」块中的最后一条
+  const silverMatches = Array.from(
+    block.matchAll(
+      /1#白银[\s\S]*?\d{4,5}-\d{4,5}[\s\S]*?(\d{4,5})[\s\S]*?元\/千克/g
+    )
+  );
+  if (silverMatches.length > 0) {
+    silverPerKgRmb = Number(silverMatches[silverMatches.length - 1][1]);
   }
   if (silverPerKgRmb == null || !Number.isFinite(silverPerKgRmb)) {
-    silverMatch = html.match(/<td[^>]*>1#白银<\/td>\s*<td[^>]*>[^<]*<\/td>\s*<td[^>]*>(\d+)/);
-    if (silverMatch) silverPerKgRmb = Number(silverMatch[1]);
+    const fallbackSilverMatches = Array.from(
+      html.matchAll(
+        /1#白银[\s\S]*?\d{4,5}-\d{4,5}[\s\S]*?(\d{4,5})[\s\S]*?元\/千克/g
+      )
+    );
+    if (fallbackSilverMatches.length > 0) {
+      silverPerKgRmb = Number(
+        fallbackSilverMatches[fallbackSilverMatches.length - 1][1]
+      );
+    }
+  }
+  if (silverPerKgRmb == null || !Number.isFinite(silverPerKgRmb)) {
+    const simpleSilverMatches = Array.from(
+      html.matchAll(
+        /<td[^>]*>1#白银<\/td>\s*<td[^>]*>[^<]*<\/td>\s*<td[^>]*>(\d+)/g
+      )
+    );
+    if (simpleSilverMatches.length > 0) {
+      silverPerKgRmb = Number(
+        simpleSilverMatches[simpleSilverMatches.length - 1][1]
+      );
+    }
   }
 
-  return {
+  const result = {
     copperPerTonRmb: Number.isFinite(copperPerTonRmb) ? copperPerTonRmb : null,
     silverPerKgRmb: Number.isFinite(silverPerKgRmb) ? silverPerKgRmb : null,
   };
+
+  // #region agent log
+  try {
+    const logLine = JSON.stringify({
+      sessionId: 'ff78e6',
+      runId: 'pre-fix',
+      hypothesisId: 'SCF-parse',
+      location: 'scf/ccmn-prices/index.js:parsePricesFromHtml',
+      message: 'Parsed prices from CCMN HTML',
+      data: result,
+      timestamp: Date.now(),
+    });
+    fs.appendFileSync(
+      '/Users/liudingcheng/Desktop/实时计算利润平台/.cursor/debug-ff78e6.log',
+      `${logLine}\n`,
+      { encoding: 'utf8' }
+    );
+  } catch (_) {
+    // ignore logging errors locally / in SCF
+  }
+  // #endregion
+
+  return result;
 }
 
 function jsonResponse(statusCode, data) {
@@ -93,6 +165,81 @@ exports.main_handler = async () => {
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : '获取长江有色价格失败';
+
+    // #region agent log
+    try {
+      const logLine = JSON.stringify({
+        sessionId: 'ff78e6',
+        runId: 'pre-fix',
+        hypothesisId: 'SCF-error',
+        location: 'scf/ccmn-prices/index.js:main_handler',
+        message: 'Error in main_handler',
+        data: { errorMessage: message },
+        timestamp: Date.now(),
+      });
+      fs.appendFileSync(
+        '/Users/liudingcheng/Desktop/实时计算利润平台/.cursor/debug-ff78e6.log',
+        `${logLine}\n`,
+        { encoding: 'utf8' }
+      );
+    } catch (_) {
+      // ignore logging errors
+    }
+    // #endregion
+
     return jsonResponse(500, { error: message });
   }
 };
+
+// Allow running locally for debugging
+if (require.main === module) {
+  exports
+    .main_handler()
+    .then((res) => {
+      // #region agent log
+      try {
+        const logLine = JSON.stringify({
+          sessionId: 'ff78e6',
+          runId: 'pre-fix',
+          hypothesisId: 'SCF-main',
+          location: 'scf/ccmn-prices/index.js:cli',
+          message: 'main_handler local run result',
+          data: { statusCode: res.statusCode, body: res.body },
+          timestamp: Date.now(),
+        });
+        fs.appendFileSync(
+          '/Users/liudingcheng/Desktop/实时计算利润平台/.cursor/debug-ff78e6.log',
+          `${logLine}\n`,
+          { encoding: 'utf8' }
+        );
+      } catch (_) {
+        // ignore logging errors
+      }
+      // #endregion
+      process.stdout.write(`${res.statusCode}\n${res.body}\n`);
+    })
+    .catch((err) => {
+      // #region agent log
+      try {
+        const logLine = JSON.stringify({
+          sessionId: 'ff78e6',
+          runId: 'pre-fix',
+          hypothesisId: 'SCF-main-error',
+          location: 'scf/ccmn-prices/index.js:cli-catch',
+          message: 'Error running main_handler locally',
+          data: { errorMessage: String(err && err.message ? err.message : err) },
+          timestamp: Date.now(),
+        });
+        fs.appendFileSync(
+          '/Users/liudingcheng/Desktop/实时计算利润平台/.cursor/debug-ff78e6.log',
+          `${logLine}\n`,
+          { encoding: 'utf8' }
+        );
+      } catch (_) {
+        // ignore logging errors
+      }
+      // #endregion
+      process.stderr.write(String(err));
+      process.exit(1);
+    });
+}
