@@ -13,89 +13,83 @@ export interface FetchMetalPricesOptions {
   metals?: MetalSymbol[];
 }
 
+/** 长江有色 API 返回：铜 元/吨，银 元/千克 */
+const CCMN_API_PATH = '/api/ccmn-prices';
+
+async function fetchCcmnPrices(): Promise<MetalPriceSnapshot> {
+  const fullUrl =
+    typeof import.meta.env.VITE_CCMN_API_URL === 'string' &&
+    import.meta.env.VITE_CCMN_API_URL.length > 0
+      ? import.meta.env.VITE_CCMN_API_URL
+      : (() => {
+          const base =
+            typeof import.meta.env.VITE_CCMN_API_BASE === 'string'
+              ? import.meta.env.VITE_CCMN_API_BASE
+              : '';
+          return `${base}${CCMN_API_PATH}`;
+        })();
+
+  const res = await fetch(fullUrl);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(
+      (err as { error?: string }).error ?? `长江有色接口错误: ${res.status}`
+    );
+  }
+  const data = (await res.json()) as {
+    timestamp: string;
+    baseCurrency: string;
+    copperPerTonRmb: number;
+    silverPerKgRmb: number;
+  };
+
+  const metals: {
+    symbol: MetalSymbol;
+    name: string;
+    currency: string;
+    pricePerTon: number;
+  }[] = [];
+
+  if (data.copperPerTonRmb != null) {
+    metals.push({
+      symbol: 'CU',
+      name: 'Copper',
+      currency: data.baseCurrency ?? 'CNY',
+      pricePerTon: data.copperPerTonRmb,
+    });
+  }
+  if (data.silverPerKgRmb != null) {
+    metals.push({
+      symbol: 'AG',
+      name: 'Silver',
+      currency: data.baseCurrency ?? 'CNY',
+      pricePerTon: data.silverPerKgRmb * 1000,
+    });
+  }
+
+  return {
+    timestamp: data.timestamp ?? new Date().toISOString(),
+    baseCurrency: data.baseCurrency ?? 'CNY',
+    metals,
+  };
+}
+
 /**
- * 封装金属价格（统一改为使用 MetalpriceAPI）。
- * - 通过 VITE_METALPRICE_API_KEY、VITE_METALPRICE_SYMBOL_CU、VITE_METALPRICE_SYMBOL_AG 进行配置
- * - 如请求失败或未配置 Key，则回退到内置模拟价格
+ * 封装金属价格：统一改回使用长江有色金属网。
+ * 如果接口失败，则退回到内置模拟价格。
  */
 export async function fetchMetalPrices(
   options?: FetchMetalPricesOptions
 ): Promise<MetalPriceSnapshot> {
-  const apiUrl =
-    import.meta.env.VITE_METALPRICE_API_URL ??
-    'https://api.metalpriceapi.com/v1/latest';
-  const apiKey = import.meta.env.VITE_METALPRICE_API_KEY;
-  const cuKey =
-    import.meta.env.VITE_METALPRICE_SYMBOL_CU ?? 'XCU';
-  const agKey =
-    import.meta.env.VITE_METALPRICE_SYMBOL_AG ?? 'XAG';
-
-  if (!apiKey) {
+  try {
+    const snapshot = await fetchCcmnPrices();
+    const want = options?.metals ?? ['CU', 'AG'];
+    const filtered = snapshot.metals.filter((m) => want.includes(m.symbol));
+    return { ...snapshot, metals: filtered };
+  } catch (e) {
+    console.warn('长江有色价格获取失败，使用模拟数据', e);
     return getMockSnapshot();
   }
-
-  const url = new URL(apiUrl);
-  url.searchParams.set('api_key', apiKey);
-  url.searchParams.set('base', 'CNY');
-  url.searchParams.set('currencies', [cuKey, agKey].join(','));
-
-  const res = await fetch(url.toString());
-  if (!res.ok) {
-    console.warn('MetalpriceAPI 请求失败，使用模拟数据', res.status, res.statusText);
-    return getMockSnapshot();
-  }
-
-  const data: {
-    time?: number;
-    base?: string;
-    rates: Record<string, number>;
-  } = await res.json();
-
-  const metals: MetalPriceSnapshot['metals'] = [];
-  const baseCurrency = data.base ?? 'CNY';
-
-  if (Number.isFinite(data.rates[cuKey])) {
-    metals.push({
-      symbol: 'CU',
-      name: 'Copper',
-      currency: baseCurrency,
-      // 这里直接按照 MetalpriceAPI 返回的数值当作「元/吨」
-      // 如果你之后确认单位不同，我们只需要在这里做一次换算即可。
-      pricePerTon: data.rates[cuKey]
-    });
-  }
-  if (Number.isFinite(data.rates[agKey])) {
-    metals.push({
-      symbol: 'AG',
-      name: 'Silver',
-      currency: baseCurrency,
-      pricePerTon: data.rates[agKey]
-    });
-  }
-
-  // 如果 API 里没有返回铜 / 银，就退回模拟数据，避免前端空数据
-  if (metals.length === 0) {
-    return getMockSnapshot();
-  }
-
-  return {
-    timestamp:
-      typeof data.time === 'number'
-        ? new Date(data.time * 1000).toISOString()
-        : new Date().toISOString(),
-    baseCurrency,
-    metals: (options?.metals ?? ['CU', 'AG']).map((symbol) => {
-      const found = metals.find((m) => m.symbol === symbol);
-      return (
-        found ?? {
-          symbol,
-          name: DEFAULT_METALS.find((m) => m.symbol === symbol)?.name ?? symbol,
-          currency: baseCurrency,
-          pricePerTon: 0
-        }
-      );
-    })
-  };
 }
 
 function getMockSnapshot(): MetalPriceSnapshot {
