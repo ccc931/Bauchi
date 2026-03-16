@@ -468,7 +468,7 @@ export const ProfitDashboard: React.FC = () => {
             <div className="metric-hint">
               {priceMode === 'auto'
                 ? snapshot
-                  ? `自动模式：长江有色金属网（铜元/吨，银元/千克），更新时间 ${new Date(
+                  ? `自动模式：长江有色金属网，更新时间 ${new Date(
                       snapshot.timestamp
                     ).toLocaleString('zh-CN')}`
                   : '自动模式：长江有色接口不可用时使用模拟价格'
@@ -533,7 +533,7 @@ export const ProfitDashboard: React.FC = () => {
         </div>
         {priceMode === 'auto' && (
           <div className="card-disclaimer">
-            自动模式使用长江有色金属网公开报价，仅供内部测算参考
+            自动模式目前尚未完善，数据可能有误，请谨慎使用
           </div>
         )}
       </section>
