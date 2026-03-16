@@ -111,8 +111,10 @@ async function fetchCcmnPrices(): Promise<MetalPriceSnapshot> {
 }
 
 /**
- * 封装金属价格：优先使用长江有色金属网（自动模式默认），
- * 也可通过 VITE_PRICE_SOURCE=metals-api 使用国际接口（需配置 VITE_METALS_API_KEY）。
+ * 封装金属价格：
+ * - 默认：长江有色金属网（VITE_PRICE_SOURCE=ccmn 或未设置）
+ * - MetalpriceAPI：VITE_PRICE_SOURCE=metalpriceapi（需配置 VITE_METALPRICE_API_KEY 等）
+ * - 兼容旧的 metals-api：VITE_PRICE_SOURCE=metals-api（需配置 VITE_METALS_API_KEY）
  */
 export async function fetchMetalPrices(
   options?: FetchMetalPricesOptions
@@ -129,6 +131,67 @@ export async function fetchMetalPrices(
       console.warn('长江有色价格获取失败，使用模拟数据', e);
       return getMockSnapshot();
     }
+  }
+
+  if (source === 'metalpriceapi') {
+    const apiUrl =
+      import.meta.env.VITE_METALPRICE_API_URL ??
+      'https://api.metalpriceapi.com/v1/latest';
+    const apiKey = import.meta.env.VITE_METALPRICE_API_KEY;
+    const cuKey =
+      import.meta.env.VITE_METALPRICE_SYMBOL_CU ?? 'XCU';
+    const agKey =
+      import.meta.env.VITE_METALPRICE_SYMBOL_AG ?? 'XAG';
+
+    if (!apiKey) {
+      return getMockSnapshot();
+    }
+
+    const url = new URL(apiUrl);
+    url.searchParams.set('api_key', apiKey);
+    url.searchParams.set('base', 'CNY');
+    url.searchParams.set('currencies', [cuKey, agKey].join(','));
+
+    const res = await fetch(url.toString());
+    if (!res.ok) {
+      throw new Error(`MetalpriceAPI 获取价格失败: ${res.status} ${res.statusText}`);
+    }
+
+    const data: {
+      time?: number;
+      base?: string;
+      rates: Record<string, number>;
+    } = await res.json();
+
+    const metals: MetalPriceSnapshot['metals'] = [];
+    const baseCurrency = data.base ?? 'CNY';
+
+    if (Number.isFinite(data.rates[cuKey])) {
+      metals.push({
+        symbol: 'CU',
+        name: 'Copper',
+        currency: baseCurrency,
+        // 假设 API 直接返回每吨价格（单位如不同，可在这里做换算）
+        pricePerTon: data.rates[cuKey]
+      });
+    }
+    if (Number.isFinite(data.rates[agKey])) {
+      metals.push({
+        symbol: 'AG',
+        name: 'Silver',
+        currency: baseCurrency,
+        pricePerTon: data.rates[agKey]
+      });
+    }
+
+    return {
+      timestamp:
+        typeof data.time === 'number'
+          ? new Date(data.time * 1000).toISOString()
+          : new Date().toISOString(),
+      baseCurrency,
+      metals
+    };
   }
 
   const apiUrl =
