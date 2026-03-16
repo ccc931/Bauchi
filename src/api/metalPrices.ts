@@ -119,7 +119,8 @@ async function fetchCcmnPrices(): Promise<MetalPriceSnapshot> {
 export async function fetchMetalPrices(
   options?: FetchMetalPricesOptions
 ): Promise<MetalPriceSnapshot> {
-  const source = import.meta.env.VITE_PRICE_SOURCE ?? 'ccmn';
+  // 默认改为 MetalpriceAPI，只有显式配置为 ccmn 时才走长江有色
+  const source = import.meta.env.VITE_PRICE_SOURCE ?? 'metalpriceapi';
 
   if (source === 'ccmn') {
     try {
