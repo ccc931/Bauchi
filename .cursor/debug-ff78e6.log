@@ -1,0 +1,2 @@
+{"sessionId":"ff78e6","runId":"pre-fix","hypothesisId":"A","location":"src/api/metalPrices.ts:fetchCcmnPrices:url","message":"fetchCcmnPrices request URL","data":{"fullUrl":"/api/ccmn-prices"},"timestamp":1773654011761}
+{"sessionId":"ff78e6","runId":"pre-fix","hypothesisId":"B","location":"src/api/metalPrices.ts:fetchCcmnPrices:response","message":"fetchCcmnPrices raw response","data":{"timestamp":"2026-03-16T09:39:34.388Z","baseCurrency":"CNY","copperPerTonRmb":102230,"silverPerKgRmb":24300},"timestamp":1773654011852}
