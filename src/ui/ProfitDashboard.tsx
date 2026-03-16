@@ -18,7 +18,7 @@ const defaultInput: MineInput = {
   copperGradePercent: '2.5',
   silverGradePercent: '0.008',
   recoveryPercent: '85',
-  annualTonnage10k: '50'
+  annualTonnage10k: '10'
 };
 
 function safeParseNumber(value: string, fallback: number): number {
