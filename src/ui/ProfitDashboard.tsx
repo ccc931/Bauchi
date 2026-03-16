@@ -468,14 +468,10 @@ export const ProfitDashboard: React.FC = () => {
             <div className="metric-hint">
               {priceMode === 'auto'
                 ? snapshot
-                  ? snapshot.baseCurrency === 'CNY'
-                    ? `自动模式：长江有色，更新时间 ${new Date(
-                        snapshot.timestamp
-                      ).toLocaleString('zh-CN')}`
-                    : `自动模式：当前为模拟数据（长江有色未响应，请用已部署的网址打开或稍后重试），更新时间 ${new Date(
-                        snapshot.timestamp
-                      ).toLocaleString('zh-CN')}`
-                  : '自动模式：未配置 API Key 时使用模拟价格'
+                  ? `自动模式：MetalpriceAPI（金属价格，延迟约 1 天），更新时间 ${new Date(
+                      snapshot.timestamp
+                    ).toLocaleString('zh-CN')}`
+                  : '自动模式：未配置 MetalpriceAPI Key 时使用模拟价格'
                 : '手动模式：由你在上方输入/拖动滑块设定'}
             </div>
           </div>
@@ -537,7 +533,7 @@ export const ProfitDashboard: React.FC = () => {
         </div>
         {priceMode === 'auto' && (
           <div className="card-disclaimer">
-            自动模式目前尚在完善中，价格可能不准，仅供参考
+            自动模式使用 MetalpriceAPI 免费版数据（延迟约 24 小时），仅供内部测算参考
           </div>
         )}
       </section>
